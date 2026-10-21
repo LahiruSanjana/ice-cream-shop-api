@@ -17,6 +17,8 @@ func main() {
 	app.Use(logger.New())
 	api := app.Group("/api")
 	routes.RegisterAuthRoutes(api.Group("/auth"))
+	routes.ItemRoutes(api)
+	routes.CategoryRoutes(api)
 
 	app.Get("/", func(c *fiber.Ctx) error {
 		return c.SendString("App is running healthy.")
