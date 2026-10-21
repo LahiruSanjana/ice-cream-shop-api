@@ -6,6 +6,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"main/src/database"
+	"main/src/routes"
 )
 
 func main() {
@@ -14,6 +15,8 @@ func main() {
 
 	app := fiber.New()
 	app.Use(logger.New())
+	api := app.Group("/api")
+	routes.RegisterAuthRoutes(api.Group("/auth"))
 
 	app.Get("/", func(c *fiber.Ctx) error {
 		return c.SendString("App is running healthy.")
