@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"main/src/database"
 	"main/src/models"
+	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -14,6 +15,8 @@ import (
 var (
 	errInvalidOrder      = errors.New("invalid order")
 	errInsufficientStock = errors.New("insufficient stock")
+	errCustomerNotFound  = errors.New("customer not found")
+	errItemNotFound      = errors.New("item not found")
 )
 
 func CreateOrder(c *fiber.Ctx) error {
@@ -38,7 +41,7 @@ func CreateOrder(c *fiber.Ctx) error {
 	}
 
 	if body.CustomerID == 0 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "customer_id is required"})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "CustomerID is required"})
 	}
 
 	var calculatedTotalPrice float64
@@ -47,7 +50,10 @@ func CreateOrder(c *fiber.Ctx) error {
 	err := database.DB.Transaction(func(tx *gorm.DB) error {
 		var customer models.Customer
 		if err := tx.First(&customer, body.CustomerID).Error; err != nil {
-			return fmt.Errorf("customer not found: %w", err)
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return fmt.Errorf("%w: %d", errCustomerNotFound, body.CustomerID)
+			}
+			return err
 		}
 
 		for _, orderItem := range body.Items {
@@ -57,7 +63,10 @@ func CreateOrder(c *fiber.Ctx) error {
 
 			var item models.Item
 			if err := tx.First(&item, orderItem.ItemID).Error; err != nil {
-				return fmt.Errorf("item %d not found: %w", orderItem.ItemID, err)
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return fmt.Errorf("%w: %d", errItemNotFound, orderItem.ItemID)
+				}
+				return err
 			}
 
 			result := tx.Model(&models.Item{}).
@@ -98,8 +107,19 @@ func CreateOrder(c *fiber.Ctx) error {
 	})
 
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) || errors.Is(err, errInvalidOrder) || errors.Is(err, errInsufficientStock) {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+		switch {
+		case errors.Is(err, errCustomerNotFound), errors.Is(err, errItemNotFound):
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		case errors.Is(err, errInvalidOrder):
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		case errors.Is(err, errInsufficientStock):
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+				"error": err.Error(),
+			})
 		}
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not create order"})
 	}
@@ -113,7 +133,7 @@ func CreateOrder(c *fiber.Ctx) error {
 func GetOrdersLatest(c *fiber.Ctx) error {
 	currentTime := time.Now()
 	last24Hours := currentTime.Add(-24 * time.Hour)
-	
+
 	var orders []models.Order
 	if err := database.DB.Preload("Items").Where("created_at >= ?", last24Hours.Unix()).Find(&orders).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not retrieve orders"})
@@ -126,10 +146,15 @@ func GetOrdersByDate(c *fiber.Ctx) error {
 	var orders []models.Order
 	date := c.Query("date")
 	if date == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "date query parameter is required"})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Date is required"})
 	}
 
-	parsedDate, err := time.Parse("2006-01-02", date)
+	location, err := time.LoadLocation("Asia/Colombo")
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not load location"})
+	}
+
+	parsedDate, err := time.ParseInLocation("2006-01-02", date, location)
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid date format. Use YYYY-MM-DD"})
 	}
@@ -138,6 +163,47 @@ func GetOrdersByDate(c *fiber.Ctx) error {
 	endOfDay := parsedDate.Add(24 * time.Hour).Unix()
 
 	if err := database.DB.Preload("Items").Where("created_at >= ? AND created_at < ?", startOfDay, endOfDay).Find(&orders).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not retrieve orders"})
+	}
+
+	return c.JSON(orders)
+}
+
+func GetOrdersByCustomer(c *fiber.Ctx) error {
+	customerID := c.Params("customer_id")
+	if customerID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "CustomerID is required"})
+	}
+
+	customerIDUint, err := strconv.ParseUint(customerID, 10, 64)
+	if err != nil || customerIDUint == 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid CustomerID format"})
+	}
+
+	var orders []models.Order
+	if err := database.DB.Preload("Items").Where("customer_id = ?", customerIDUint).Find(&orders).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not retrieve orders"})
+	}
+
+	return c.JSON(orders)
+}
+
+func GetOrdersPaginated(c *fiber.Ctx) error {
+	page := c.QueryInt("page", 1)
+	limit := c.QueryInt("limit", 10)
+
+	if page < 1 || limit < 1 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "page and limit must be positive integers"})
+	}
+
+	if limit > 100 {
+		limit = 100
+	}
+
+	offset := (page - 1) * limit
+
+	var orders []models.Order
+	if err := database.DB.Preload("Items").Offset(offset).Limit(limit).Find(&orders).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not retrieve orders"})
 	}
 
