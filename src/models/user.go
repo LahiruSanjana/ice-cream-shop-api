@@ -1,9 +1,5 @@
 package models
 
-import (
-	_ "gorm.io/gorm"
-)
-
 var userRole = map[string]string{
 	"owner":   "owner",
 	"manager": "manager",

@@ -19,6 +19,7 @@ func main() {
 	routes.RegisterAuthRoutes(api.Group("/auth"))
 	routes.ItemRoutes(api)
 	routes.CategoryRoutes(api)
+	routes.OrderRoutes(api)
 
 	app.Get("/", func(c *fiber.Ctx) error {
 		return c.SendString("App is running healthy.")
