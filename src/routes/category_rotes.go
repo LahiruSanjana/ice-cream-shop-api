@@ -11,5 +11,7 @@ func CategoryRoutes(router fiber.Router) {
 	categoryRouter.Use(middleware.AuthMiddleware())
 	categoryRouter.Post("/", middleware.RoleMiddleware("owner", "manager"), handlers.CreateCategory)
 	categoryRouter.Get("/", handlers.GetCategories)
-	categoryRouter.Get("/:id", handlers.GetCategory)
+	categoryRouter.Get("/:id", handlers.GetCategoryById)
+	categoryRouter.Put("/:id", middleware.RoleMiddleware("owner", "manager"), handlers.UpdateCategory)
+	categoryRouter.Delete("/:id", middleware.RoleMiddleware("owner", "manager"), handlers.DeleteCategory)
 }

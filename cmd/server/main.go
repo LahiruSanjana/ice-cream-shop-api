@@ -20,6 +20,7 @@ func main() {
 	routes.ItemRoutes(api)
 	routes.CategoryRoutes(api)
 	routes.OrderRoutes(api)
+	routes.CustomerRoutes(api)
 
 	app.Get("/", func(c *fiber.Ctx) error {
 		return c.SendString("App is running healthy.")
