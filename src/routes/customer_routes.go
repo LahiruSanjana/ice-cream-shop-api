@@ -13,5 +13,5 @@ func CustomerRoutes(router fiber.Router) {
 	customerRouter.Get("/:id", handlers.GetCustomerById)
 	customerRouter.Post("/", handlers.CreateCustomer)
 	customerRouter.Put("/:id", handlers.UpdateCustomer)
-	customerRouter.Delete("/:id", handlers.DeleteCustomer)
+	customerRouter.Delete("/:id",middleware.RoleMiddleware("owner"), handlers.DeleteCustomer) // Apply the RoleMiddleware to all customer routes, allowing only owner
 }
