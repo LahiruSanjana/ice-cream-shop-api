@@ -106,5 +106,24 @@ func LoginUser(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not generate token"})
 	}
 
-	return c.Status(fiber.StatusOK).JSON(fiber.Map{"token": tokenString, "message": "Login successful"})
+	c.Cookie(&fiber.Cookie{
+		Name:     "jwt",
+		Value:    tokenString,
+		HTTPOnly: true,
+		Secure:   true,
+		SameSite: "Lax",
+		MaxAge:   60 * 60 * 24,
+	})
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"message": "Login successful",
+	})
+}
+
+func LogoutUser(c *fiber.Ctx) error {
+	c.ClearCookie("jwt")
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"message": "Logout successful",
+	})
 }

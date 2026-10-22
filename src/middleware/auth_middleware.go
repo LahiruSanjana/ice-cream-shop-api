@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"os"
-	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
@@ -10,14 +9,11 @@ import (
 
 func AuthMiddleware() fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		authorization := strings.TrimSpace(c.Get("Authorization"))
-		if authorization == "" {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Missing token"})
-		}
-
-		scheme, tokenString, ok := strings.Cut(authorization, " ")
-		if !ok || !strings.EqualFold(scheme, "Bearer") || strings.TrimSpace(tokenString) == "" {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid authorization header"})
+		tokenString := c.Cookies("jwt")
+		if tokenString == "" {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "Missing authentication cookie",
+			})
 		}
 
 		jwtSecret := os.Getenv("JWT_SECRET")
@@ -25,18 +21,32 @@ func AuthMiddleware() fiber.Handler {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "JWT secret is not configured"})
 		}
 
-		token, err := jwt.Parse(strings.TrimSpace(tokenString), func(token *jwt.Token) (interface{}, error) {
+		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 			return []byte(jwtSecret), nil
 		}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
-		if err != nil {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
-		}
-		if !token.Valid {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+		if err != nil || !token.Valid {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "Invalid token",
+			})
 		}
 
-		c.Locals("user_id", token.Claims.(jwt.MapClaims)["user_id"])
-		c.Locals("role", token.Claims.(jwt.MapClaims)["role"])
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "Invalid token claims",
+			})
+		}
+
+		userID, userIDExists := claims["user_id"]
+		role, roleExists := claims["role"]
+		if !userIDExists || !roleExists {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "Required token claims are missing",
+			})
+		}
+
+		c.Locals("user_id", userID)
+		c.Locals("role", role)
 		return c.Next()
 	}
 }

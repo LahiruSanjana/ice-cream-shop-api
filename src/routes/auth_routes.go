@@ -9,4 +9,5 @@ import (
 func RegisterAuthRoutes(router fiber.Router) {
 	router.Post("/register", handlers.RegisterUser)
 	router.Post("/login", handlers.LoginUser)
+	router.Post("/logout", handlers.LogoutUser)
 }
