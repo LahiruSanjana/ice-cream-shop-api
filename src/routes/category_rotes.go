@@ -1,9 +1,9 @@
 package routes
 
 import (
+	"github.com/gofiber/fiber/v2"
 	"main/src/handlers"
 	"main/src/middleware"
-	"github.com/gofiber/fiber/v2"
 )
 
 func CategoryRoutes(router fiber.Router) {
@@ -13,5 +13,5 @@ func CategoryRoutes(router fiber.Router) {
 	categoryRouter.Get("/", handlers.GetCategories)
 	categoryRouter.Get("/:id", handlers.GetCategoryById)
 	categoryRouter.Put("/:id", middleware.RoleMiddleware("owner", "manager"), handlers.UpdateCategory)
-	categoryRouter.Delete("/:id", middleware.RoleMiddleware("owner", "manager"), handlers.DeleteCategory)
+	categoryRouter.Delete("/:id", middleware.RoleMiddleware("owner"), handlers.DeleteCategory)
 }

@@ -158,7 +158,7 @@ All category endpoints require authentication.
 | `GET` | `/categories/:id` | Any authenticated user | Get one category |
 | `POST` | `/categories` | Owner, Manager | Create a category |
 | `PUT` | `/categories/:id` | Owner, Manager | Update a category |
-| `DELETE` | `/categories/:id` | Owner, Manager | Delete a category |
+| `DELETE` | `/categories/:id` | Owner | Delete a category |
 
 ### Items
 

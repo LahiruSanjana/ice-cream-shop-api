@@ -30,12 +30,11 @@ func RegisterUser(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "name, email, and password are required"})
 	}
 
-	if body.Role == "" {
-		body.Role = models.RoleCashier
-	}
-	if body.Role != models.RoleOwner && body.Role != models.RoleManager && body.Role != models.RoleCashier {
+	if body.Role != "" && body.Role != models.RoleCashier {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid role"})
 	}
+
+	body.Role = models.RoleCashier
 
 	var existingUser models.User
 	err := database.DB.Where("email = ?", body.Email).First(&existingUser).Error
