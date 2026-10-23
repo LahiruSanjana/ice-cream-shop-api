@@ -29,7 +29,7 @@ and orders. The application is built with Go, Fiber, GORM, and SQLite.
 ```text
 .
 ├── cmd/server/main.go       # Application entry point
-├── src/assets/              # ER Diagram
+├── src/assets/              # ER diagram and Postman collection
 ├── src/database/            # Database connection, migrations, and seed data
 ├── src/handlers/            # HTTP handlers and tests
 ├── src/middleware/          # Authentication and role middleware
@@ -257,6 +257,43 @@ go test -race ./...
 The test suite covers successful requests, invalid request bodies, missing
 required fields, not-found cases, authorization failures, invalid parameters,
 and order stock rollback behavior.
+
+## Postman collection
+
+The repository includes a ready-to-import Postman collection:
+
+[Ice cream shop.postman_collection.json](./src/assets/Ice%20cream%20shop.postman_collection.json)
+
+To use it:
+
+1. Start the API with `go run ./cmd/server`.
+2. Import the collection JSON file into Postman.
+3. Send one of the login requests in the **User** folder.
+4. Confirm that Postman stores the `jwt` cookie for `localhost`.
+5. Run the protected CRUD, order, and role-permission requests.
+
+The collection includes:
+
+- Owner, Manager, and Cashier login requests
+- Customer, category, item, and order requests
+- No-JWT and insufficient-permission checks
+- Insufficient-stock order validation
+
+Run the requests in this order when using a fresh database:
+
+1. Login as Owner.
+2. Create a category and note its returned `id`.
+3. Create an item using that `category_id` and note its returned `id`.
+4. Create a customer and note its returned `id`.
+5. Use those IDs in item, customer, and order requests.
+6. Login as Manager or Cashier to verify role restrictions.
+
+Some requests use example IDs such as `1` or `2`. Replace them with IDs returned
+by your own API responses when using a new database.
+
+The Postman collection is safe to commit to GitHub. Do not commit `.env`, real
+JWT tokens, session cookies, or production credentials. Commit
+`.env.example` instead.
 
 ## HTTP status codes
 
