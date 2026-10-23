@@ -252,3 +252,102 @@ func TestDeleteItem(t *testing.T) {
 		t.Fatalf("expected item to be deleted, but it still exists")
 	}
 }
+
+func TestGetItemByIdNotFound(t *testing.T) {
+	setupTestDB(t)
+	app := fiber.New()
+	app.Get("/items/:id", GetItemById)
+
+	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/items/9999", nil))
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected status code %d, got %d", http.StatusNotFound, resp.StatusCode)
+	}
+}
+
+func TestCreateItemValidation(t *testing.T) {
+	testDB := setupTestDB(t)
+	category := seedTestCategory(t, testDB)
+	app := fiber.New()
+	app.Post("/items", CreateItem)
+
+	tests := []string{
+		`{`,
+		`{"name":"Ice Cream"}`,
+		fmt.Sprintf(`{"name":"Ice Cream","price":0,"quantity":1,"category_id":%d}`, category.ID),
+		fmt.Sprintf(`{"name":"Ice Cream","price":1,"quantity":-1,"category_id":%d}`, category.ID),
+	}
+	for _, body := range tests {
+		req := httptest.NewRequest(http.MethodPost, "/items", bytes.NewBufferString(body))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("body %q: expected status code %d, got %d", body, http.StatusBadRequest, resp.StatusCode)
+		}
+	}
+}
+
+func TestUpdateItemValidation(t *testing.T) {
+	testDB := setupTestDB(t)
+	category := seedTestCategory(t, testDB)
+	item := models.Item{Name: "Vanilla", Price: 5, Quantity: 10, CategoryID: category.ID}
+	if err := testDB.Create(&item).Error; err != nil {
+		t.Fatalf("failed to seed item: %v", err)
+	}
+
+	app := fiber.New()
+	app.Put("/items/:id", UpdateItem)
+	tests := []string{`{`, `{}`, `{"name":""}`, `{"price":-1}`, `{"quantity":-1}`}
+	for _, body := range tests {
+		req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/items/%d", item.ID), bytes.NewBufferString(body))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("body %q: expected status code %d, got %d", body, http.StatusBadRequest, resp.StatusCode)
+		}
+	}
+}
+
+func TestUpdateItemNotFound(t *testing.T) {
+	setupTestDB(t)
+	app := fiber.New()
+	app.Put("/items/:id", UpdateItem)
+
+	req := httptest.NewRequest(http.MethodPut, "/items/9999", bytes.NewBufferString(`{"name":"Vanilla"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected status code %d, got %d", http.StatusNotFound, resp.StatusCode)
+	}
+}
+
+func TestDeleteItemNotFound(t *testing.T) {
+	setupTestDB(t)
+	app := fiber.New()
+	app.Delete("/items/:id", DeleteItem)
+
+	resp, err := app.Test(httptest.NewRequest(http.MethodDelete, "/items/9999", nil))
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected status code %d, got %d", http.StatusNotFound, resp.StatusCode)
+	}
+}

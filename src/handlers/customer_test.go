@@ -274,3 +274,104 @@ func TestDeleteCustomer(t *testing.T) {
 		t.Fatalf("expected customer to be deleted, but it still exists")
 	}
 }
+
+func TestGetCustomerByIdNotFound(t *testing.T) {
+	setupTestDB(t)
+
+	app := fiber.New()
+	app.Get("/customers/:id", GetCustomerById)
+
+	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/customers/9999", nil))
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected status code %d, got %d", http.StatusNotFound, resp.StatusCode)
+	}
+}
+
+func TestCreateCustomerInvalidRequest(t *testing.T) {
+	setupTestDB(t)
+
+	app := fiber.New()
+	app.Post("/customers", CreateCustomer)
+
+	tests := []string{`{"name":`, `{"name":"Jane"}`}
+	for _, body := range tests {
+		resp, err := app.Test(func() *http.Request {
+			req := httptest.NewRequest(http.MethodPost, "/customers", bytes.NewBufferString(body))
+			req.Header.Set("Content-Type", "application/json")
+			return req
+		}())
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		resp.Body.Close()
+
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("expected status code %d, got %d", http.StatusBadRequest, resp.StatusCode)
+		}
+	}
+}
+
+func TestUpdateCustomerValidation(t *testing.T) {
+	testDB := setupTestDB(t)
+	customer := models.Customer{Name: "John Doe", Email: "john@example.com", Phone: "1234567890"}
+	if err := testDB.Create(&customer).Error; err != nil {
+		t.Fatalf("failed to seed customer: %v", err)
+	}
+
+	app := fiber.New()
+	app.Put("/customers/:id", UpdateCustomer)
+
+	tests := []string{`{`, `{}`, `{"name":""}`, `{"email":""}`, `{"phone":""}`}
+	for _, body := range tests {
+		req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/customers/%d", customer.ID), bytes.NewBufferString(body))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := app.Test(req)
+		if err != nil {
+			t.Fatalf("request failed: %v", err)
+		}
+		resp.Body.Close()
+
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("body %q: expected status code %d, got %d", body, http.StatusBadRequest, resp.StatusCode)
+		}
+	}
+}
+
+func TestUpdateCustomerNotFound(t *testing.T) {
+	setupTestDB(t)
+	app := fiber.New()
+	app.Put("/customers/:id", UpdateCustomer)
+
+	req := httptest.NewRequest(http.MethodPut, "/customers/9999", bytes.NewBufferString(`{"name":"Jane"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected status code %d, got %d", http.StatusNotFound, resp.StatusCode)
+	}
+}
+
+func TestDeleteCustomerNotFound(t *testing.T) {
+	setupTestDB(t)
+	app := fiber.New()
+	app.Delete("/customers/:id", DeleteCustomer)
+
+	resp, err := app.Test(httptest.NewRequest(http.MethodDelete, "/customers/9999", nil))
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected status code %d, got %d", http.StatusNotFound, resp.StatusCode)
+	}
+}

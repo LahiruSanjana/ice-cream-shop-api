@@ -68,6 +68,24 @@ func TestGetCategoryById(t *testing.T) {
 	}
 }
 
+func TestGetCategoryByIdNotFound(t *testing.T) {
+	setupTestDB(t)
+
+	app := fiber.New()
+	app.Get("/categories/:id", GetCategoryById)
+
+	req := httptest.NewRequest(http.MethodGet, "/categories/9999", nil)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected status code %d, but got %d", http.StatusNotFound, resp.StatusCode)
+	}
+}
+
 func TestCreateCategory(t *testing.T) {
 	testDB, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
 	if err != nil {
@@ -101,7 +119,46 @@ func TestCreateCategory(t *testing.T) {
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("expected status code %d, but got %d", http.StatusCreated, resp.StatusCode)
 	}
+}
 
+func TestCreateCategoryInvalidJSON(t *testing.T) {
+	setupTestDB(t)
+
+	app := fiber.New()
+	app.Post("/categories", CreateCategory)
+
+	req := httptest.NewRequest(http.MethodPost, "/categories", bytes.NewBufferString(`{"name":`))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected status code %d, but got %d", http.StatusBadRequest, resp.StatusCode)
+	}
+}
+
+func TestCreateCategoryNameRequired(t *testing.T) {
+	setupTestDB(t)
+
+	app := fiber.New()
+	app.Post("/categories", CreateCategory)
+
+	req := httptest.NewRequest(http.MethodPost, "/categories", bytes.NewBufferString(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected status code %d, but got %d", http.StatusBadRequest, resp.StatusCode)
+	}
 }
 
 func TestUpdateCategory(t *testing.T) {
@@ -134,6 +191,74 @@ func TestUpdateCategory(t *testing.T) {
 	}
 }
 
+func TestUpdateCategoryNotFound(t *testing.T) {
+	setupTestDB(t)
+
+	app := fiber.New()
+	app.Put("/categories/:id", UpdateCategory)
+
+	req := httptest.NewRequest(http.MethodPut, "/categories/9999", bytes.NewBufferString(`{"name":"Peppermint"}`))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected status code %d, but got %d", http.StatusNotFound, resp.StatusCode)
+	}
+}
+
+func TestUpdateCategoryInvalidJSON(t *testing.T) {
+	testDB := setupTestDB(t)
+	category := models.Category{Name: "Vanilla"}
+	if err := testDB.Create(&category).Error; err != nil {
+		t.Fatalf("failed to seed test category: %v", err)
+	}
+
+	app := fiber.New()
+	app.Put("/categories/:id", UpdateCategory)
+
+	req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/categories/%d", category.ID), bytes.NewBufferString(`{"name":`))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected status code %d, but got %d", http.StatusBadRequest, resp.StatusCode)
+	}
+}
+
+func TestUpdateCategoryNameCannotBeEmpty(t *testing.T) {
+	testDB := setupTestDB(t)
+	category := models.Category{Name: "Vanilla"}
+	if err := testDB.Create(&category).Error; err != nil {
+		t.Fatalf("failed to seed test category: %v", err)
+	}
+
+	app := fiber.New()
+	app.Put("/categories/:id", UpdateCategory)
+
+	req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/categories/%d", category.ID), bytes.NewBufferString(`{"name":""}`))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected status code %d, but got %d", http.StatusBadRequest, resp.StatusCode)
+	}
+}
+
 func TestDeleteCategory(t *testing.T) {
 	testDB := setupTestDB(t)
 
@@ -144,7 +269,7 @@ func TestDeleteCategory(t *testing.T) {
 	if err := testDB.Create(&category).Error; err != nil {
 		t.Fatalf("failed to seed test category: %v", err)
 	}
-	
+
 	app := fiber.New()
 	app.Delete("/categories/:id", DeleteCategory)
 
@@ -159,5 +284,23 @@ func TestDeleteCategory(t *testing.T) {
 
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected status code %d, but got %d", http.StatusOK, resp.StatusCode)
+	}
+}
+
+func TestDeleteCategoryNotFound(t *testing.T) {
+	setupTestDB(t)
+
+	app := fiber.New()
+	app.Delete("/categories/:id", DeleteCategory)
+
+	req := httptest.NewRequest(http.MethodDelete, "/categories/9999", nil)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected status code %d, but got %d", http.StatusNotFound, resp.StatusCode)
 	}
 }
